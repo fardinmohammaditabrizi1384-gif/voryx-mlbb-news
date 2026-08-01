@@ -3,6 +3,9 @@ name: Voryx News Bot
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -24,3 +27,11 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python main.py
+
+      - name: Save latest news
+        run: |
+          git config user.name "Voryx Bot"
+          git config user.email "bot@voryx.com"
+          git add last_news.txt
+          git diff --cached --quiet || git commit -m "Update latest news"
+          git push
