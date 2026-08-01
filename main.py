@@ -3,40 +3,85 @@ import requests
 from bs4 import BeautifulSoup
 
 NEWS_URL = "https://en.moonton.com/news/index.html"
+BASE_URL = "https://en.moonton.com"
+LAST_NEWS_FILE = "last_news.txt"
+
+# -----------------------------
+# دریافت صفحه اخبار
+# -----------------------------
 
 response = requests.get(NEWS_URL, timeout=30)
 response.raise_for_status()
 
 soup = BeautifulSoup(response.text, "html.parser")
 
-# پیدا کردن لینک‌های خبر
 news_links = []
 
 for link in soup.find_all("a", href=True):
     href = link["href"]
 
-    if "/news/" in href and href != "/news/index.html":
-        if href.startswith("/"):
-            href = "https://en.moonton.com" + href
+    if "/news/" not in href:
+        continue
 
-        if href not in news_links:
-            news_links.append(href)
+    if href.endswith("index.html"):
+        continue
 
-print("آخرین لینک‌های پیدا شده:")
+    if href.startswith("/"):
+        href = BASE_URL + href
 
-for link in news_links[:5]:
-    print(link)
+    if href not in news_links:
+        news_links.append(href)
 
-# ارسال نتیجه به تلگرام
+
+# -----------------------------
+# آخرین خبر
+# -----------------------------
+
+if not news_links:
+    print("هیچ خبری پیدا نشد.")
+    exit()
+
+latest_news = news_links[0]
+
+print("آخرین خبر:")
+print(latest_news)
+
+
+# -----------------------------
+# بررسی خبر قبلی
+# -----------------------------
+
+old_news = ""
+
+if os.path.exists(LAST_NEWS_FILE):
+    with open(LAST_NEWS_FILE, "r") as file:
+        old_news = file.read().strip()
+
+
+if latest_news == old_news:
+    print("خبر جدیدی وجود ندارد.")
+    exit()
+
+
+# -----------------------------
+# ذخیره خبر جدید
+# -----------------------------
+
+with open(LAST_NEWS_FILE, "w") as file:
+    file.write(latest_news)
+
+
+# -----------------------------
+# ارسال به تلگرام
+# -----------------------------
+
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-message = "📰 تست دریافت اخبار MOONTON\n\n"
+message = f"""🆕 خبر جدید MOONTON
 
-if news_links:
-    message += "\n".join(news_links[:5])
-else:
-    message += "هیچ خبری پیدا نشد."
+{latest_news}
+"""
 
 url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
@@ -49,4 +94,4 @@ requests.post(
     timeout=30
 )
 
-print("نتیجه به تلگرام ارسال شد.")
+print("خبر جدید به تلگرام ارسال شد.")
