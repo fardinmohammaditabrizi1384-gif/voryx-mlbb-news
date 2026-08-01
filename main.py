@@ -160,6 +160,12 @@ else:
 
     print("Telegram:", response.json())
 
+if response.ok:
+    print("خبر با موفقیت به Telegram ارسال شد.")
+else:
+    print("ارسال به Telegram ناموفق بود.")
+    exit(1)
+
 
 # -------------------------
 # ذخیره خبر
