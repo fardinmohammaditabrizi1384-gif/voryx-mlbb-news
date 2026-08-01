@@ -29,9 +29,10 @@ def get_news_content(url):
 
     soup = BeautifulSoup(response.text, "html.parser")
 
-    title = soup.find("h1")
+    # پیدا کردن عنوان
+    title = soup.find("title")
 
-    # متن اصلی خبر
+    # متن خبر
     text_parts = []
 
     for element in soup.find_all(["p", "h2", "h3"]):
@@ -40,27 +41,38 @@ def get_news_content(url):
         if text:
             text_parts.append(text)
 
-    # تصاویر
+    # پیدا کردن تصاویر
     images = []
 
     for img in soup.find_all("img"):
         src = img.get("src")
 
-        if src:
-            image_url = urljoin(url, src)
+        if not src:
+            continue
 
-            if image_url not in images:
-                images.append(image_url)
+        image_url = urljoin(url, src)
+
+        # حذف لوگوها و تصاویر غیرمرتبط
+        if any(x in image_url.lower() for x in [
+            "logo",
+            "flogo",
+            "logob",
+            "icon"
+        ]):
+            continue
+
+        if image_url not in images:
+            images.append(image_url)
 
     return {
-        "title": title.get_text(" ", strip=True) if title else "بدون عنوان",
+        "title": title.get_text(" ", strip=True) if title else "خبر MOONTON",
         "text": "\n\n".join(text_parts),
         "images": images
     }
 
 
 # -------------------------
-# پیدا کردن خبر جدید
+# پیدا کردن آخرین خبر
 # -------------------------
 
 latest_news = get_latest_news()
@@ -73,7 +85,7 @@ print("آخرین خبر:", latest_news)
 
 
 # -------------------------
-# بررسی تکراری بودن
+# بررسی خبر تکراری
 # -------------------------
 
 old_news = ""
@@ -93,17 +105,63 @@ if latest_news == old_news:
 
 news = get_news_content(latest_news)
 
-print("\n========== NEWS ==========\n")
-print("TITLE:")
-print(news["title"])
+title = news["title"]
+text = news["text"]
 
-print("\nTEXT:")
-print(news["text"])
+# اولین تصویر واقعی خبر
+image_url = news["images"][0] if news["images"] else None
 
-print("\nIMAGES:")
+print("TITLE:", title)
+print("IMAGE:", image_url)
 
-for image in news["images"]:
-    print(image)
+
+# -------------------------
+# Telegram
+# -------------------------
+
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+
+# ارسال عکس + کپشن
+if image_url:
+
+    telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
+
+    caption = f"""📰 {title}
+
+{text[:900]}
+
+🔗 منبع:
+{latest_news}
+"""
+
+    response = requests.post(
+        telegram_url,
+        data={
+            "chat_id": CHAT_ID,
+            "photo": image_url,
+            "caption": caption
+        },
+        timeout=60
+    )
+
+    print("Telegram:", response.json())
+
+else:
+
+    telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+
+    response = requests.post(
+        telegram_url,
+        data={
+            "chat_id": CHAT_ID,
+            "text": f"{title}\n\n{text[:3500]}\n\n{latest_news}"
+        },
+        timeout=60
+    )
+
+    print("Telegram:", response.json())
 
 
 # -------------------------
@@ -113,4 +171,4 @@ for image in news["images"]:
 with open(LAST_NEWS_FILE, "w") as file:
     file.write(latest_news)
 
-print("\nخبر با موفقیت استخراج شد.")
+print("خبر پردازش و ارسال شد.")
