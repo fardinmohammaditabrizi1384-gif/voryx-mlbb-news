@@ -128,14 +128,11 @@ if image_url:
 
     telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
 
-    caption = f"""📰 {title}
-
-{text[:900]}
+caption = f"""📰 {title[:500]}
 
 🔗 منبع:
 {latest_news}
 """
-
     response = requests.post(
         telegram_url,
         data={
