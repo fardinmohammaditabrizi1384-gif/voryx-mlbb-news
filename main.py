@@ -478,22 +478,61 @@ else:
     )
 
 
-# ==================================================
-# بررسی نتیجه Telegram
-# ==================================================
+# -------------------------
+# Telegram
+# -------------------------
 
-print("Telegram:", response.json())
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-if response.ok:
+# ارسال عکس اصلی خبر
+if image_url:
 
-    print("خبر با موفقیت به Telegram ارسال شد.")
+    telegram_photo_url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
 
-else:
+    photo_response = requests.post(
+        telegram_photo_url,
+        data={
+            "chat_id": CHAT_ID,
+            "photo": image_url
+        },
+        timeout=60
+    )
 
-    print("ارسال به Telegram ناموفق بود.")
+    print("Telegram Photo:", photo_response.json())
 
+    if not photo_response.ok:
+        print("ارسال عکس ناموفق بود.")
+        exit(1)
+
+
+# ارسال متن کامل Voryx
+telegram_text_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+
+message = f"""{ai_text}
+
+━━━━━━━━━━━━━━━━━━
+
+🔗 **منبع:**
+{latest_news}
+"""
+
+text_response = requests.post(
+    telegram_text_url,
+    data={
+        "chat_id": CHAT_ID,
+        "text": message
+    },
+    timeout=60
+)
+
+print("Telegram Text:", text_response.json())
+
+if not text_response.ok:
+    print("ارسال متن ناموفق بود.")
     exit(1)
 
+print("خبر با موفقیت به Telegram ارسال شد.")
 
 # ==================================================
 # ذخیره خبر پردازش‌شده
