@@ -11,22 +11,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 client = Groq(api_key=GROQ_API_KEY)
 
-# -------------------------
-# تست اتصال Groq
-# -------------------------
 
-test_response = client.chat.completions.create(
-    model="openai/gpt-oss-120b",
-    messages=[
-        {
-            "role": "user",
-            "content": "در یک جمله کوتاه بگو اتصال موفق است."
-        }
-    ],
-)
-
-print("GROQ TEST:")
-print(test_response.choices[0].message.content)
 
 
 def get_latest_news():
@@ -150,6 +135,36 @@ title = news["title"]
 text = news["text"]
 
 image_url = news["images"][0] if news["images"] else None
+
+# -------------------------
+# تست تحلیل خبر با Groq
+# -------------------------
+
+groq_response = client.chat.completions.create(
+    model="openai/gpt-oss-120b",
+    messages=[
+        {
+            "role": "system",
+            "content": "تو یک تحلیلگر اخبار بازی Mobile Legends هستی. متن خبر را به فارسی روان و کوتاه خلاصه کن."
+        },
+        {
+            "role": "user",
+            "content": f"""
+عنوان خبر:
+{title}
+
+متن خبر:
+{text}
+"""
+        }
+    ],
+)
+
+ai_text = groq_response.choices[0].message.content
+
+print("========== GROQ AI ==========")
+print(ai_text)
+print("==============================")
 
 
 print("TITLE:", title)
