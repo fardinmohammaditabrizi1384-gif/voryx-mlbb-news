@@ -2,10 +2,14 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+from groq import Groq
 
 NEWS_URL = "https://en.moonton.com/news/index.html"
 BASE_URL = "https://en.moonton.com"
 LAST_NEWS_FILE = "last_news.txt"
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+client = Groq(api_key=GROQ_API_KEY)
 
 
 def get_latest_news():
