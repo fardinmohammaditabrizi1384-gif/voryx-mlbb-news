@@ -238,7 +238,7 @@ def generate_voryx_post(title, text):
 
 
 خبر:
-{news_text}
+{text}
 """
 
     response = client.chat.completions.create(
