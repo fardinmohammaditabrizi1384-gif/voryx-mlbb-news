@@ -140,7 +140,7 @@ image_url = news["images"][0] if news["images"] else None
 # Voryx AI News Generator
 # -------------------------
 
-prompt = f"""
+system_prompt = f"""
 تو سردبیر و نویسنده اخبار فارسی برند Voryx هستی.
 
 وظیفه تو این است که خبر رسمی زیر را به یک پست کوتاه، حرفه‌ای و روان برای کانال تلگرام Voryx تبدیل کنی.
