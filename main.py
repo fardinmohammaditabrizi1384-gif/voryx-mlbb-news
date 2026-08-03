@@ -4,23 +4,56 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from groq import Groq
 
+
+# =========================================================
+# SETTINGS
+# =========================================================
+
 NEWS_URL = "https://en.moonton.com/news/index.html"
 BASE_URL = "https://en.moonton.com"
 LAST_NEWS_FILE = "last_news.txt"
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+
+# =========================================================
+# CHECK API KEYS
+# =========================================================
+
+if not TELEGRAM_BOT_TOKEN:
+    raise Exception("TELEGRAM_BOT_TOKEN پیدا نشد.")
+
+if not TELEGRAM_CHAT_ID:
+    raise Exception("TELEGRAM_CHAT_ID پیدا نشد.")
+
+if not GROQ_API_KEY:
+    raise Exception("GROQ_API_KEY پیدا نشد.")
+
 
 client = Groq(api_key=GROQ_API_KEY)
 
 
-
+# =========================================================
+# GET LATEST NEWS
+# =========================================================
 
 def get_latest_news():
-    response = requests.get(NEWS_URL, timeout=30)
+    response = requests.get(
+        NEWS_URL,
+        timeout=30,
+        headers={
+            "User-Agent": "Mozilla/5.0"
+        }
+    )
+
     response.raise_for_status()
 
     soup = BeautifulSoup(response.text, "html.parser")
 
     for link in soup.find_all("a", href=True):
+
         href = link["href"]
 
         if "/news/" in href and not href.endswith("index.html"):
@@ -29,46 +62,71 @@ def get_latest_news():
     return None
 
 
+# =========================================================
+# GET NEWS CONTENT
+# =========================================================
+
 def get_news_content(url):
-    response = requests.get(url, timeout=30)
+
+    response = requests.get(
+        url,
+        timeout=30,
+        headers={
+            "User-Agent": "Mozilla/5.0"
+        }
+    )
+
     response.raise_for_status()
 
     soup = BeautifulSoup(response.text, "html.parser")
 
     # -------------------------
-    # عنوان
+    # Title
     # -------------------------
 
-    title = soup.find("title")
+    title_tag = soup.find("title")
 
-    if title:
-        title = title.get_text(" ", strip=True)
-    else:
-        title = "خبر MOONTON"
+    title = (
+        title_tag.get_text(" ", strip=True)
+        if title_tag
+        else "خبر جدید Mobile Legends"
+    )
 
+    # حذف بخش اضافه عنوان سایت
+    title = title.replace(
+        "-Develop games and fun for players all over the world",
+        ""
+    ).strip()
 
     # -------------------------
-    # متن خبر
+    # Text
     # -------------------------
 
     text_parts = []
 
     for element in soup.find_all(["p", "h2", "h3"]):
+
         text = element.get_text(" ", strip=True)
 
-        if text:
-            text_parts.append(text)
+        if not text:
+            continue
+
+        # حذف متن‌های تکراری / غیرخبری
+        if text in text_parts:
+            continue
+
+        text_parts.append(text)
 
     text = "\n\n".join(text_parts)
 
-
     # -------------------------
-    # تصاویر
+    # Images
     # -------------------------
 
     images = []
 
     for img in soup.find_all("img"):
+
         src = img.get("src")
 
         if not src:
@@ -76,18 +134,22 @@ def get_news_content(url):
 
         image_url = urljoin(url, src)
 
-        # حذف لوگوها و آیکون‌ها
-        if any(x in image_url.lower() for x in [
-            "logo",
-            "flogo",
-            "logob",
-            "icon"
-        ]):
+        lower_url = image_url.lower()
+
+        # حذف لوگو و آیکون
+        if any(
+            item in lower_url
+            for item in [
+                "logo",
+                "flogo",
+                "logob",
+                "icon"
+            ]
+        ):
             continue
 
         if image_url not in images:
             images.append(image_url)
-
 
     return {
         "title": title,
@@ -96,243 +158,256 @@ def get_news_content(url):
     }
 
 
-# ==================================================
-# پیدا کردن آخرین خبر
-# ==================================================
+# =========================================================
+# GENERATE VORYX POST
+# =========================================================
+
+def generate_voryx_post(title, text):
+
+    prompt = f"""
+تو نویسنده و سردبیر کانال تلگرام Voryx هستی.
+
+خبر رسمی زیر را به یک پست فارسی کوتاه، جذاب، صمیمی و حرفه‌ای تبدیل کن.
+
+قوانین بسیار مهم:
+
+1. خروجی فقط پست نهایی باشد.
+2. هیچ توضیحی قبل یا بعد از پست ننویس.
+3. زبان اصلی فارسی باشد.
+4. نام بازی، تیم‌ها، بازیکنان و اصطلاحات تخصصی را انگلیسی نگه دار.
+5. فارسی را طبیعی و روان بنویس.
+6. ترجمه تحت‌اللفظی از انگلیسی ممنوع است.
+7. لحن دوستانه و گیمری باشد، اما حرفه‌ای باقی بماند.
+8. متن کوتاه باشد.
+9. کل خروجی حداکثر 170 کلمه باشد.
+10. اطلاعات غیرضروری را حذف کن.
+11. اطلاعات را تکرار نکن.
+12. تحلیل Voryx فقط 1 یا 2 جمله باشد.
+13. حداکثر 4 بولت استفاده کن.
+14. از Markdown استفاده نکن.
+15. از ** یا ## یا ### استفاده نکن.
+16. هشتگ استفاده نکن.
+17. لینک استفاده نکن.
+18. کلمه «منبع» را ننویس.
+19. هیچ URL یا آدرس سایت در خروجی قرار نده.
+20. در پایان فقط یک سؤال کوتاه و صمیمی بنویس.
+21. ایموجی استفاده کن، اما متعادل.
+22. متن را با ایموجی‌های زیاد شلوغ نکن.
+23. اگر اطلاعاتی در خبر وجود ندارد، آن بخش را حذف کن.
+24. هیچ اطلاعاتی که در خبر وجود ندارد اختراع نکن.
+25. اعداد و نتایج مسابقات را دقیق حفظ کن.
+
+ساختار خروجی:
+
+🏆 [عنوان کوتاه و جذاب]
+
+[خلاصه خبر در 2 جمله]
+
+━━━━━━━━━━━━━━━━━━
+
+📌 جزئیات
+
+• [مهم‌ترین نکته]
+• [نکته مهم دوم]
+• [نکته مهم سوم]
+
+━━━━━━━━━━━━━━━━━━
+
+🔍 تحلیل Voryx
+
+[یک یا دو جمله کوتاه و ساده]
+
+━━━━━━━━━━━━━━━━━━
+
+💬 نظر شما؟
+
+[یک سؤال کوتاه و صمیمی]
+
+━━━━━━━━━━━━━━━━━━
+
+قوانین عنوان:
+
+- عنوان کوتاه باشد.
+- عنوان با فارسی شروع شود.
+- نام تیم یا بازی می‌تواند انگلیسی باشد.
+- عنوان طولانی نباشد.
+
+خبر رسمی:
+
+عنوان:
+{title}
+
+متن:
+{text}
+"""
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        temperature=0.4,
+        max_tokens=700
+    )
+
+    result = response.choices[0].message.content.strip()
+
+    return result
+
+
+# =========================================================
+# SEND PHOTO TO TELEGRAM
+# =========================================================
+
+def send_photo(image_url):
+
+    telegram_url = (
+        f"https://api.telegram.org/"
+        f"bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+    )
+
+    response = requests.post(
+        telegram_url,
+        data={
+            "chat_id": TELEGRAM_CHAT_ID,
+            "photo": image_url
+        },
+        timeout=60
+    )
+
+    print("Telegram Photo:", response.json())
+
+    response.raise_for_status()
+
+
+# =========================================================
+# SEND TEXT TO TELEGRAM
+# =========================================================
+
+def send_text(message):
+
+    telegram_url = (
+        f"https://api.telegram.org/"
+        f"bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    )
+
+    response = requests.post(
+        telegram_url,
+        data={
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message
+        },
+        timeout=60
+    )
+
+    print("Telegram Text:", response.json())
+
+    response.raise_for_status()
+
+
+# =========================================================
+# MAIN
+# =========================================================
+
+print("شروع Voryx News Bot...")
+
+
+# -------------------------
+# Find latest news
+# -------------------------
 
 latest_news = get_latest_news()
 
 if not latest_news:
     print("هیچ خبری پیدا نشد.")
-    exit(1)
+    exit(0)
 
 print("آخرین خبر:", latest_news)
 
 
-# ==================================================
-# بررسی خبر تکراری
-# ==================================================
+# -------------------------
+# Check duplicate
+# -------------------------
 
 old_news = ""
 
 if os.path.exists(LAST_NEWS_FILE):
-    with open(LAST_NEWS_FILE, "r", encoding="utf-8") as file:
+
+    with open(
+        LAST_NEWS_FILE,
+        "r",
+        encoding="utf-8"
+    ) as file:
+
         old_news = file.read().strip()
 
 
 if latest_news == old_news:
+
     print("خبر جدیدی وجود ندارد.")
     exit(0)
 
 
-# ==================================================
-# استخراج خبر
-# ==================================================
+# -------------------------
+# Extract news
+# -------------------------
 
 news = get_news_content(latest_news)
 
 title = news["title"]
 text = news["text"]
 
-image_url = news["images"][0] if news["images"] else None
-
-# -------------------------
-# Voryx AI News Generator
-# -------------------------
-
-system_prompt = f"""You are a Persian Mobile Legends: Bang Bang news editor.
-
-Read the provided news and rewrite it as a SHORT, SIMPLE, NATURAL Persian Telegram post.
-
-The news category is usually one of these:
-
-* Event
-* Game Update / Changes
-* Tournament / Competition
-
-Use this exact structure:
-
-[Short Topic]
-
-ــــــــــــــــــــــــــــــــــــ
-
-[Short and simple explanation of the news]
-
-ــــــــــــــــــــــــــــــــــــ
-
-[1–2 short sentences of simple analysis]
-
-ــــــــــــــــــــــــــــــــــــ
-
-[Short question related to the news]
-❤️ ری‌اکشن یادتون نره
-💬 نظرتون رو کامنت کنید
-📤 اگه خبر براتون جالب بود، برای دوستاتون بفرستید
-
-ــــــــــــــــــــــــــــــــــــ
-
-[LINKS]
-
-Rules:
-
-* Write only in simple, fluent Persian.
-* Keep the text short and human.
-* Do not translate literally.
-* Do not add information that is not in the source.
-* Keep official English names such as Hero, Team, Skin and Event names unchanged.
-* Place English names naturally inside Persian sentences to avoid RTL/LTR problems.
-* Do not use bullet points.
-* Do not use extra headings or labels.
-* Keep each section separate with the separator above.
-* Do not write anything after the Links section.
-* Leave the [LINKS] section empty for later editing.
-
-RAW NEWS:
-{{INPUT}}
-
-"""
-        }
-    ],
+image_url = (
+    news["images"][0]
+    if news["images"]
+    else None
 )
-
-ai_text = groq_response.choices[0].message.content
-
-print("========== VORYX AI ==========")
-print(ai_text)
-print("==============================")
-
-ai_text = groq_response.choices[0].message.content
-
-print("========== GROQ AI ==========")
-print(ai_text)
-print("==============================")
-
 
 print("TITLE:", title)
 print("IMAGE:", image_url)
 
 
-# ==================================================
-# Telegram
-# ==================================================
-
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-
-if not TOKEN or not CHAT_ID:
-    print("Telegram credentials پیدا نشد.")
-    exit(1)
-
-
-# ==================================================
-# ارسال عکس + کپشن
-# ==================================================
-
-if image_url:
-
-    telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
-
-    caption = f"""📰 {title[:500]}
-
-🔗 منبع:
-{latest_news}
-"""
-
-    response = requests.post(
-        telegram_url,
-        data={
-            "chat_id": CHAT_ID,
-            "photo": image_url,
-            "caption": caption
-        },
-        timeout=60
-    )
-
-
-# ==================================================
-# اگر عکس وجود نداشت → ارسال متن
-# ==================================================
-
-else:
-
-    telegram_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-
-    message = f"""📰 {title}
-
-{text[:3500]}
-
-🔗 منبع:
-{latest_news}
-"""
-
-    response = requests.post(
-        telegram_url,
-        data={
-            "chat_id": CHAT_ID,
-            "text": message
-        },
-        timeout=60
-    )
-
-
 # -------------------------
-# Telegram
+# Generate Voryx content
 # -------------------------
 
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+print("========== VORYX AI ==========")
 
-# ارسال عکس اصلی خبر
-if image_url:
-
-    telegram_photo_url = f"https://api.telegram.org/bot{TOKEN}/sendPhoto"
-
-    photo_response = requests.post(
-        telegram_photo_url,
-        data={
-            "chat_id": CHAT_ID,
-            "photo": image_url
-        },
-        timeout=60
-    )
-
-    print("Telegram Photo:", photo_response.json())
-
-    if not photo_response.ok:
-        print("ارسال عکس ناموفق بود.")
-        exit(1)
-
-
-# ارسال متن کامل Voryx
-telegram_text_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-
-message = ai_text
-
-
-
-text_response = requests.post(
-    telegram_text_url,
-    data={
-        "chat_id": CHAT_ID,
-        "text": message
-    },
-    timeout=60
+ai_text = generate_voryx_post(
+    title,
+    text
 )
 
-print("Telegram Text:", text_response.json())
+print(ai_text)
 
-if not text_response.ok:
-    print("ارسال متن ناموفق بود.")
-    exit(1)
+print("==============================")
 
-print("خبر با موفقیت به Telegram ارسال شد.")
 
-# ==================================================
-# ذخیره خبر پردازش‌شده
-# ==================================================
+# -------------------------
+# Send to Telegram
+# -------------------------
 
-with open(LAST_NEWS_FILE, "w", encoding="utf-8") as file:
+if image_url:
+
+    send_photo(image_url)
+
+send_text(ai_text)
+
+
+# -------------------------
+# Save latest news
+# -------------------------
+
+with open(
+    LAST_NEWS_FILE,
+    "w",
+    encoding="utf-8"
+) as file:
+
     file.write(latest_news)
 
-print("خبر پردازش و ذخیره شد.")
+
+print("خبر با موفقیت ارسال و ذخیره شد.")
