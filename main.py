@@ -140,7 +140,7 @@ image_url = news["images"][0] if news["images"] else None
 # Voryx AI News Generator
 # -------------------------
 
-system_prompt = f""You are a professional Mobile Legends: Bang Bang news editor.
+system_prompt = f"""You are a professional Mobile Legends: Bang Bang news editor.
 
 Your job is to convert the provided raw article into a SHORT, CLEAN, STRUCTURED, and EASY-TO-READ Persian (Farsi) Telegram news post.
 
